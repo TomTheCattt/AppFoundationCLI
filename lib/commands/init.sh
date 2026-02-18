@@ -74,6 +74,9 @@ cmd_init() {
     log_step "Installing Foundation modules..."
     cp -rn "$cache_dir/Sources/AppFoundation/"* "$project_name/Foundation/"
     cp -rn "$cache_dir/Sources/AppFoundationResources/"* "$project_name/Foundation/"
+    # Explicitly ensure Generated folder is copied if not already present
+    mkdir -p "$project_name/Foundation/Generated"
+    cp -n "$cache_dir/Sources/AppFoundationResources/Generated/"* "$project_name/Foundation/Generated/" 2>/dev/null || true
     # Remove RealmStorage.swift as Realm is optional and not included by default
     rm -f "$project_name/Foundation/Storage/RealmStorage.swift"
     
