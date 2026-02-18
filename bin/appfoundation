@@ -16,7 +16,7 @@ source "$SCRIPT_DIR/utils/validator.sh"
 source "$SCRIPT_DIR/core/config.sh"
 
 # Version
-VERSION="1.0.0"
+VERSION="1.0.1"
 
 # Show help
 show_help() {
