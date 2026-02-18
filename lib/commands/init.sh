@@ -23,8 +23,7 @@ cmd_init() {
     
     # Check if directory exists
     if [ -d "$project_name" ]; then
-        log_error "Directory '$project_name' already exists"
-        exit 1
+        log_info "Directory '$project_name' already exists. Supplementing missing files..."
     fi
     
     # Fetch templates
@@ -73,26 +72,28 @@ cmd_init() {
     # Copy Foundation
     # Copy Foundation
     log_step "Installing Foundation modules..."
-    cp -r "$cache_dir/Sources/AppFoundation/"* "$project_name/Foundation/"
-    cp -r "$cache_dir/Sources/AppFoundationResources/"* "$project_name/Foundation/"
+    cp -rn "$cache_dir/Sources/AppFoundation/"* "$project_name/Foundation/"
+    cp -rn "$cache_dir/Sources/AppFoundationResources/"* "$project_name/Foundation/"
     # Remove RealmStorage.swift as Realm is optional and not included by default
     rm -f "$project_name/Foundation/Storage/RealmStorage.swift"
     
     # Copy Tests
     log_step "Installing Test templates..."
-    cp -r "$cache_dir/Tests/"* "$project_name/Tests/"
+    cp -rn "$cache_dir/Tests/"* "$project_name/Tests/"
     
     # Copy templates
-    cp "$cache_dir/Templates/Foundation/Core/project.yml.template" "$project_name/project.yml"
-    cp "$cache_dir/Templates/Foundation/Core/swiftgen.yml.template" "$project_name/swiftgen.yml"
-    cp "$cache_dir/Templates/Foundation/Core/Podfile.template" "$project_name/Podfile"
-    cp "$cache_dir/.swiftlint.yml" "$project_name/.swiftlint.yml"
+    cp -n "$cache_dir/Templates/Foundation/Core/project.yml.template" "$project_name/project.yml"
+    cp -n "$cache_dir/Templates/Foundation/Core/swiftgen.yml.template" "$project_name/swiftgen.yml"
+    cp -n "$cache_dir/Templates/Foundation/Core/Podfile.template" "$project_name/Podfile"
+    cp -n "$cache_dir/.swiftlint.yml" "$project_name/.swiftlint.yml"
     
     # Personalize templates
     log_step "Personalizing templates..."
+    local bundle_prefix=$(echo "$bundle_id" | sed 's/\.[^.]*$//')
     find "$project_name" -type f \( -name "*.swift" -o -name "*.yml" -o -name "*.yaml" -o -name "Podfile" \) -exec sed -i '' \
         -e "s/{{PROJECT_NAME}}/$project_name/g" \
         -e "s/{{BUNDLE_ID}}/$bundle_id/g" \
+        -e "s/{{BUNDLE_ID_PREFIX}}/$bundle_prefix/g" \
         -e "s/{{DEPLOYMENT_TARGET}}/$ios_target/g" \
         -e "s/{{DEVELOPMENT_TEAM}}/$team_id/g" \
         {} \;
