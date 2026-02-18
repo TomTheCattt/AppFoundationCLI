@@ -96,9 +96,7 @@ cmd_init() {
         if [ -f "$project_cwd/project.yml" ]; then
             detected_bundle_id=$(grep "bundleIdPrefix:" "$project_cwd/project.yml" | head -1 | awk '{print $2}')
             if [ -n "$detected_bundle_id" ]; then
-                 # Usually defaults to prefix, try to construct full ID or find specific target ID
-                 # If simple logic fails, try finding PRODUCT_BUNDLE_IDENTIFIER in pbxproj
-                 :
+                 : # Found
             fi
         fi
         
@@ -114,7 +112,6 @@ cmd_init() {
             log_info "Detected existing Bundle ID: $detected_bundle_id"
         fi
     fi
-    
     # --- End Intelligent Detection ---
 
     # 4. Configuration (if not update OR if missing info in update)
@@ -195,12 +192,11 @@ cmd_init() {
     log_info "Updating Foundation Core..."
     # Always copy core foundation files
     if command -v rsync >/dev/null 2>&1; then
-        rsync -au --exclude="Storage/Adapters/*" --exclude="Storage/RealmStorage.swift" "$cache_dir/Sources/AppFoundation/" "$project_cwd/Foundation/"
-        rsync -au "$cache_dir/Sources/AppFoundationResources/" "$project_cwd/Foundation/"
+        rsync -auv --exclude="Storage/Adapters/*" --exclude="Storage/RealmStorage.swift" "$cache_dir/Sources/AppFoundation/" "$project_cwd/Foundation/" | grep -E '^>|^<' || true
+        rsync -auv "$cache_dir/Sources/AppFoundationResources/" "$project_cwd/Foundation/" | grep -E '^>|^<' || true
     else
         cp -rf "$cache_dir/Sources/AppFoundation/"* "$project_cwd/Foundation/" 2>/dev/null || true
         cp -rf "$cache_dir/Sources/AppFoundationResources/"* "$project_cwd/Foundation/" 2>/dev/null || true
-        # Clean up if cp copied excluded items
         rm -rf "$project_cwd/Foundation/Storage/Adapters"
         rm -f "$project_cwd/Foundation/Storage/RealmStorage.swift"
     fi
@@ -211,12 +207,13 @@ cmd_init() {
         log_info "Updating $db_engine storage adapter..."
         mkdir -p "$project_cwd/Foundation/Storage/Adapters/$db_engine"
         if command -v rsync >/dev/null 2>&1; then
-            rsync -au "$cache_dir/Sources/AppFoundation/Storage/Adapters/$db_engine/" "$project_cwd/Foundation/Storage/Adapters/$db_engine/"
+            rsync -auv "$cache_dir/Sources/AppFoundation/Storage/Adapters/$db_engine/" "$project_cwd/Foundation/Storage/Adapters/$db_engine/" | grep -E '^>|^<' || true
         else
             cp -rf "$cache_dir/Sources/AppFoundation/Storage/Adapters/$db_engine/"* "$project_cwd/Foundation/Storage/Adapters/$db_engine/" 2>/dev/null || true
         fi
     fi
     if [ "$db_engine" == "Realm" ]; then
+       log_info "  + Ensuring RealmStorage.swift exists"
        [ -f "$cache_dir/Sources/AppFoundation/Storage/RealmStorage.swift" ] && cp -f "$cache_dir/Sources/AppFoundation/Storage/RealmStorage.swift" "$project_cwd/Foundation/Storage/RealmStorage.swift"
     else
        rm -f "$project_cwd/Foundation/Storage/RealmStorage.swift"
@@ -228,24 +225,47 @@ cmd_init() {
     log_info "Installing Test templates..."
     cp -rn "$cache_dir/Tests/"* "$project_cwd/Tests/" 2>/dev/null || true
     
-    log_info "Syncing app entry points..."
-    # Copy App templates based on UI Framework
-    if [ -d "$cache_dir/Templates/Foundation/App/$ui_framework" ]; then
-        if command -v rsync >/dev/null 2>&1; then
-            rsync -au --ignore-existing "$cache_dir/Templates/Foundation/App/$ui_framework/" "$project_cwd/App/"
+    log_info "Syncing app entry points for $ui_framework..."
+    # Fix for SwiftUI template path (it is at root of App template folder)
+    if [ "$ui_framework" == "SwiftUI" ]; then
+        local app_template="$cache_dir/Templates/Foundation/App/App.swift.template"
+        local target_app_file="$project_cwd/App/${project_name}App.swift"
+        
+        # Also check for standard App.swift
+        if [ -f "$project_cwd/App/App.swift" ]; then
+             target_app_file="$project_cwd/App/App.swift"
+        fi
+
+        if [ ! -f "$target_app_file" ] && [ ! -f "$project_cwd/App/App.swift" ]; then
+            log_info "  + Creating SwiftUI App entry point..."
+            cp -n "$app_template" "$target_app_file" 2>/dev/null || true
+            # Rename class in the copied file done in personalization step
         else
-            cp -rn "$cache_dir/Templates/Foundation/App/$ui_framework/"* "$project_cwd/App/" 2>/dev/null || true
+            log_info "  - Skipping SwiftUI App file (already exists)"
+        fi
+    elif [ "$ui_framework" == "UIKit" ]; then
+        if [ -d "$cache_dir/Templates/Foundation/App/UIKit" ]; then
+             log_info "  + Copying UIKit templates..."
+             if command -v rsync >/dev/null 2>&1; then
+                rsync -auv --ignore-existing "$cache_dir/Templates/Foundation/App/UIKit/" "$project_cwd/App/" | grep -E '^>|^<' || true
+             else
+                cp -rn "$cache_dir/Templates/Foundation/App/UIKit/"* "$project_cwd/App/" 2>/dev/null || true
+             fi
+        else
+             log_warn "UIKit templates not found in cache!"
         fi
     fi
-    if [ -f "$cache_dir/Templates/Foundation/App/entitlements.template" ]; then
+
+    if [ -f "$cache_dir/Templates/Foundation/App/entitlements.template" ] && [ ! -f "$project_cwd/App/$project_name.entitlements" ]; then
+        log_info "  + Creating Entitlements file..."
         cp -n "$cache_dir/Templates/Foundation/App/entitlements.template" "$project_cwd/App/$project_name.entitlements" 2>/dev/null || true
     fi
 
     log_info "Refreshing infrastructure files..."
-    cp -f "$cache_dir/Templates/Foundation/Core/project.yml.template" "$project_cwd/project.yml"
-    cp -f "$cache_dir/Templates/Foundation/Core/swiftgen.yml.template" "$project_cwd/swiftgen.yml"
-    cp -f "$cache_dir/Templates/Foundation/Core/Podfile.template" "$project_cwd/Podfile"
-    cp -n "$cache_dir/.swiftlint.yml" "$project_cwd/.swiftlint.yml"
+    cp -fv "$cache_dir/Templates/Foundation/Core/project.yml.template" "$project_cwd/project.yml" >/dev/null
+    cp -fv "$cache_dir/Templates/Foundation/Core/swiftgen.yml.template" "$project_cwd/swiftgen.yml" >/dev/null
+    cp -fv "$cache_dir/Templates/Foundation/Core/Podfile.template" "$project_cwd/Podfile" >/dev/null
+    cp -n "$cache_dir/.swiftlint.yml" "$project_cwd/.swiftlint.yml" 2>/dev/null || true
     
     log_step "Personalizing project..."
     local bundle_prefix=$(echo "$bundle_id" | sed 's/\.[^.]*$//')
@@ -286,12 +306,12 @@ EOF
     
     # Post-processing
     if check_command_exists xcodegen; then
-        log_step "Regenerating Xcode project..."
+        log_step "Regenerating Xcode project... (this might take a moment)"
         (cd "$project_cwd" && xcodegen generate --spec project.yml) || log_warn "XcodeGen failed"
     fi
     
     if check_command_exists pod; then
-        log_step "Updating CocoaPods..."
+        log_step "Updating CocoaPods... (dependencies: $db_engine)"
         (cd "$project_cwd" && pod install) || log_warn "Pod install failed"
     fi
     
@@ -300,5 +320,6 @@ EOF
     echo "Mode:         $([ "$is_update" = true ] && echo "UPDATE" || echo "INIT")"
     echo "UI Framework: $ui_framework"
     echo "Database:     $db_engine"
+    echo "Logs:         Detailed update logs displayed above."
     echo ""
 }
