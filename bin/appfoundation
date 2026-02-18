@@ -1,0 +1,93 @@
+#!/bin/bash
+# AppFoundation CLI - Main Executable
+# Version: 1.0.0
+
+set -e
+
+# Determine script directory
+SCRIPT_DIR="$HOME/.appfoundation/lib"
+if [ ! -d "$SCRIPT_DIR" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)"
+fi
+
+# Load utilities
+source "$SCRIPT_DIR/utils/logger.sh"
+source "$SCRIPT_DIR/utils/validator.sh"
+source "$SCRIPT_DIR/core/config.sh"
+
+# Version
+VERSION="1.0.0"
+
+# Show help
+show_help() {
+    cat <<EOF
+AppFoundation CLI v$VERSION
+
+USAGE:
+    appfoundation <command> [options]
+
+COMMANDS:
+    init <name>         Initialize new project
+    add <type> <name>   Add module or feature
+    update              Check and apply updates
+    sync                Sync local cache with remote
+    doctor              Health check for project
+    version             Show version information
+    help                Show this help message
+
+EXAMPLES:
+    # Create new project
+    appfoundation init MyBankingApp
+
+    # Add feature
+    appfoundation add feature Auth
+
+    # Check for updates
+    appfoundation update --check
+
+For more information, visit:
+https://github.com/TomTheCattt/AppFoundationCLI
+
+EOF
+}
+
+# Show version
+show_version() {
+    echo "AppFoundation CLI v$VERSION"
+}
+
+# Main command router
+case "$1" in
+    init)
+        source "$SCRIPT_DIR/commands/init.sh"
+        cmd_init "${@:2}"
+        ;;
+    add)
+        source "$SCRIPT_DIR/commands/add.sh"
+        cmd_add "${@:2}"
+        ;;
+    update)
+        source "$SCRIPT_DIR/commands/update.sh"
+        cmd_update "${@:2}"
+        ;;
+    sync)
+        source "$SCRIPT_DIR/commands/sync.sh"
+        cmd_sync "${@:2}"
+        ;;
+    doctor)
+        source "$SCRIPT_DIR/commands/doctor.sh"
+        cmd_doctor "${@:2}"
+        ;;
+    version|--version|-v)
+        show_version
+        ;;
+    help|--help|-h|"")
+        show_help
+        ;;
+    *)
+        log_error "Unknown command: $1"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac
